@@ -1,0 +1,131 @@
+[
+  {
+    "id": 1,
+    "title": "中村林業",
+    "category": "その他",
+    "description": "熊がでた",
+    "latitude": 40.82654,
+    "longitude": 140.73177,
+    "created_at": "2026-09-29T12:27:07+09:00"
+  },
+  {
+    "id": 2,
+    "title": "三内",
+    "address": "三内",
+    "category": "土砂崩れ",
+    "description": "やばい",
+    "latitude": 40.81445,
+    "longitude": 140.70036,
+    "created_at": "2026-09-29T12:47:58+09:00"
+  },
+  {
+    "id": 3,
+    "title": "青森自動車道",
+    "address": "青森自動車道",
+    "category": "道路の損傷",
+    "description": "えぐい",
+    "latitude": 40.80107,
+    "longitude": 140.69487,
+    "created_at": "2026-09-29T13:07:52+09:00"
+  },
+  {
+    "id": 4,
+    "title": "石江",
+    "address": "石江",
+    "category": "倒木・落下物",
+    "description": "あ",
+    "latitude": 40.82261,
+    "longitude": 140.69212,
+    "created_at": "2026-09-29T13:08:08+09:00"
+  },
+  {
+    "id": 5,
+    "title": "八ッ橋",
+    "address": "八ッ橋",
+    "category": "浸水・冠水",
+    "description": "い",
+    "latitude": 40.80052,
+    "longitude": 140.76799,
+    "created_at": "2026-09-29T13:08:20+09:00"
+  },
+  {
+    "id": 6,
+    "title": "青森環状道路",
+    "address": "青森環状道路",
+    "category": "津波",
+    "description": "あ",
+    "latitude": 40.81166,
+    "longitude": 140.69126,
+    "created_at": "2026-09-29T13:27:19+09:00"
+  },
+  {
+    "id": 7,
+    "title": "浜田二丁目",
+    "address": "浜田二丁目",
+    "category": "河川氾濫",
+    "description": "あ",
+    "latitude": 40.79714,
+    "longitude": 140.75323,
+    "created_at": "2026-09-29T13:27:59+09:00"
+  },
+  {
+    "id": 8,
+    "title": "松尾",
+    "address": "松尾",
+    "category": "道路冠水",
+    "description": "え",
+    "latitude": 40.79376,
+    "longitude": 140.73229,
+    "created_at": "2026-09-29T13:28:09+09:00"
+  },
+  {
+    "id": 9,
+    "title": "鶴ケ坂千刈線",
+    "address": "鶴ケ坂千刈線",
+    "category": "積雪による道路寸断",
+    "description": "お",
+    "latitude": 40.82702,
+    "longitude": 140.67942,
+    "created_at": "2026-09-29T13:28:22+09:00"
+  },
+  {
+    "id": 10,
+    "title": "青森自動車道",
+    "address": "青森自動車道",
+    "category": "獣害",
+    "description": "や",
+    "latitude": 40.7961,
+    "longitude": 140.74362,
+    "created_at": "2026-09-29T13:28:31+09:00"
+  },
+  {
+    "id": 11,
+    "title": "石江五丁目",
+    "address": "石江五丁目",
+    "category": "獣害",
+    "description": "熊出た",
+    "latitude": 40.83081,
+    "longitude": 140.688,
+    "attachments": [
+      {
+        "name": "image.png",
+        "url": "/static/uploads/hazards/e3765c626a2f4672b483ae2e7006e0b2.png",
+        "kind": "image",
+        "content_type": "image/png",
+        "size": 474412
+      }
+    ],
+    "created_at": "2026-09-29T13:33:59+09:00"
+  },
+  {
+    "id": 12,
+    "title": "金沢四丁目",
+    "address": "金沢四丁目",
+    "category": "倒木・落下物",
+    "description": "ああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああ",
+    "latitude": 40.80951,
+    "longitude": 140.72748,
+    "attachments": [],
+    "created_at": "2026-09-29T13:39:31+09:00"
+  }
+]

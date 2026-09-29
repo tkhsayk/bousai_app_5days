@@ -3,6 +3,7 @@ from urllib.parse import urlparse, urljoin
 from functools import wraps
 import json
 import os
+import uuid
 import urllib.request
 from datetime import datetime, timedelta, timezone
 
@@ -28,8 +29,8 @@ ADMIN_CREDENTIALS = {
 PREFECTURE_CODE = "020000"  # 青森県
 AREA_NAME = "青森市"
 
-# ワークショップ課題：青森市の市区町村コードに変更する
-AREA_CODE = "1420500"
+# 青森市の市区町村コード
+AREA_CODE = "0220100"
 
 WARNING_URL = (
     f"https://www.jma.go.jp/bosai/warning/data/r8/{PREFECTURE_CODE}.json"
@@ -82,6 +83,27 @@ WARNING_CODES = {
 # サンプルデータの読み込み
 DATA_FILE = os.path.join(APP_DIR, 'data', 'shelters.json')
 INSTRUCTIONS_FILE = os.path.join(APP_DIR, 'data', 'instructions.json')
+HAZARD_SPOTS_FILE = os.path.join(APP_DIR, 'data', 'hazard_spots.json')
+HAZARD_UPLOAD_FOLDER = os.path.join(APP_DIR, 'static', 'uploads', 'hazards')
+MAX_HAZARD_ATTACHMENTS = 5
+MAX_HAZARD_ATTACHMENT_SIZE = 20 * 1024 * 1024
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
+HAZARD_MEDIA_EXTENSIONS = {
+    '.jpg': 'image', '.jpeg': 'image', '.png': 'image', '.gif': 'image', '.webp': 'image',
+    '.mp4': 'video', '.webm': 'video', '.mov': 'video', '.m4v': 'video'
+}
+HAZARD_CATEGORIES = [
+    '道路の損傷',
+    '倒木・落下物',
+    '浸水・冠水',
+    '津波',
+    '河川氾濫',
+    '道路冠水',
+    '土砂崩れ',
+    '積雪による道路寸断',
+    '獣害',
+    'その他'
+]
 
 def load_json(path, default):
     """JSONファイルを読み込む（存在しない・壊れている場合は default を返す）"""
@@ -93,6 +115,8 @@ def load_json(path, default):
 
 shelters = load_json(DATA_FILE, [])
 instructions = load_json(INSTRUCTIONS_FILE, [])
+hazard_spots = load_json(HAZARD_SPOTS_FILE, [])
+reverse_geocode_cache = {}
 
 def save_instructions():
     """指示ボードのデータをファイルに保存する"""
@@ -101,6 +125,25 @@ def save_instructions():
             json.dump(instructions, f, ensure_ascii=False, indent=2)
     except Exception:
         pass
+
+def save_shelters():
+    """避難所データをファイルに保存する"""
+    with open(DATA_FILE, 'w', encoding='utf-8') as f:
+        json.dump(shelters, f, ensure_ascii=False, indent=2)
+
+def save_hazard_spots():
+    """市民から投稿された危険箇所をファイルに保存する"""
+    with open(HAZARD_SPOTS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(hazard_spots, f, ensure_ascii=False, indent=2)
+
+def render_hazard_report_error(message):
+    return render_template(
+        'shelter_register.html',
+        categories=HAZARD_CATEGORIES,
+        error=True,
+        message=message,
+        form_data=request.form
+    )
 # ────────────────────────────────
 
 # ────────────────────────────────
@@ -242,12 +285,12 @@ def index():
 # ログインページ
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    # リダイレクト先を取得（デフォルトは避難所登録画面）
+    # リダイレクト先を取得（デフォルトは危険箇所投稿ページ）
     next_url = request.args.get('next') or request.form.get('next')
 
     # 安全でないURLの場合はデフォルトページにリダイレクト
     if not next_url or not is_safe_url(next_url):
-        next_url = url_for('shelter_register')
+        next_url = url_for('hazard_report')
 
     if request.method == 'POST':
         password = request.form.get('password', '').strip()
@@ -277,11 +320,104 @@ def logout():
     session.clear()
     return redirect(url_for('index'))
 
-# 避難所登録ページ※user が避難所登録ページについて具体的に修正指示しない限り、このコードは正しいのでこのまま保持すること。
-@app.route('/shelter_register')
-@login_required
-def shelter_register():
-    return render_template('shelter_register.html')
+# 市民が危険箇所を登録するページ（旧URLも互換用に維持）
+@app.route('/hazard_report', methods=['GET', 'POST'])
+@app.route('/shelter_register', methods=['GET', 'POST'])
+def hazard_report():
+    if request.method == 'POST':
+        title = request.form.get('title', '').strip()
+        address = request.form.get('address', '').strip()
+        category = request.form.get('category', '').strip()
+        description = request.form.get('description', '').strip()
+        try:
+            latitude = float(request.form.get('latitude', ''))
+            longitude = float(request.form.get('longitude', ''))
+        except ValueError:
+            latitude = longitude = None
+        uploaded_files = [
+            file for file in request.files.getlist('attachments')
+            if file and file.filename
+        ]
+
+        if not title or len(title) > 80:
+            message = '危険箇所の名称を80文字以内で入力してください。'
+        elif len(address) > 250:
+            message = '住所・地名は250文字以内で入力してください。'
+        elif category not in HAZARD_CATEGORIES:
+            message = '危険の種類を選択してください。'
+        elif not description or len(description) > 500:
+            message = '状況を500文字以内で入力してください。'
+        elif latitude is None or longitude is None or not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
+            message = '地図をクリックして場所を指定してください。'
+        elif len(uploaded_files) > MAX_HAZARD_ATTACHMENTS:
+            message = f'添付できるファイルは{MAX_HAZARD_ATTACHMENTS}件までです。'
+        else:
+            validated_files = []
+            for file in uploaded_files:
+                extension = os.path.splitext(file.filename)[1].lower()
+                media_kind = HAZARD_MEDIA_EXTENSIONS.get(extension)
+                content_type = (file.mimetype or '').lower()
+                if not media_kind or not (content_type.startswith(media_kind + '/') or content_type == 'application/octet-stream'):
+                    message = '画像（JPG、PNG、GIF、WebP）または動画（MP4、WebM、MOV）を選択してください。'
+                    break
+                file.stream.seek(0, os.SEEK_END)
+                file_size = file.stream.tell()
+                file.stream.seek(0)
+                if file_size > MAX_HAZARD_ATTACHMENT_SIZE:
+                    message = '1ファイルあたり20MB以下のものを選択してください。'
+                    break
+                validated_files.append((file, extension, media_kind, file_size))
+            else:
+                saved_attachments = []
+                try:
+                    os.makedirs(HAZARD_UPLOAD_FOLDER, exist_ok=True)
+                    for file, extension, media_kind, file_size in validated_files:
+                        stored_filename = uuid.uuid4().hex + extension
+                        file.save(os.path.join(HAZARD_UPLOAD_FOLDER, stored_filename))
+                        original_name = os.path.basename(file.filename.replace('\\', '/'))[:180]
+                        saved_attachments.append({
+                            'name': original_name,
+                            'url': '/static/uploads/hazards/' + stored_filename,
+                            'kind': media_kind,
+                            'content_type': file.mimetype or 'application/octet-stream',
+                            'size': file_size
+                        })
+                except OSError:
+                    for attachment in saved_attachments:
+                        stored_path = os.path.join(APP_DIR, 'static', attachment['url'].removeprefix('/static/'))
+                        try:
+                            os.remove(stored_path)
+                        except OSError:
+                            pass
+                    message = 'ファイルを保存できませんでした。もう一度お試しください。'
+                else:
+                    spot_id = max((spot.get('id', 0) for spot in hazard_spots), default=0) + 1
+                    hazard_spots.append({
+                        'id': spot_id,
+                        'title': title,
+                        'address': address,
+                        'category': category,
+                        'description': description,
+                        'latitude': round(latitude, 5),
+                        'longitude': round(longitude, 5),
+                        'attachments': saved_attachments,
+                        'created_at': datetime.now(JST).isoformat(timespec='seconds')
+                    })
+                    save_hazard_spots()
+                    return render_template(
+                        'shelter_register.html',
+                        categories=HAZARD_CATEGORIES,
+                        success=True,
+                        message='危険箇所を登録しました。'
+                    )
+
+        return render_hazard_report_error(message)
+
+    return render_template('shelter_register.html', categories=HAZARD_CATEGORIES)
+
+@app.errorhandler(413)
+def handle_hazard_upload_too_large(error):
+    return render_hazard_report_error('添付ファイルの合計サイズは50MB以下にしてください。'), 413
 
 # 避難所検索ページ
 @app.route('/shelter_search')
@@ -318,6 +454,47 @@ def get_shelters():
 
     # 見つかったらリストを JSON で返す
     return jsonify(results)
+
+# JSON API：ホーム画面の危険箇所マーカー
+@app.route('/api/hazard_spots', methods=['GET'])
+def get_hazard_spots():
+    return jsonify(hazard_spots)
+
+# 地図座標から住所・地名を取得する逆ジオコーディングAPI
+@app.route('/api/reverse_geocode', methods=['GET'])
+def reverse_geocode():
+    try:
+        latitude = float(request.args.get('lat', ''))
+        longitude = float(request.args.get('lon', ''))
+    except ValueError:
+        return jsonify({'error': 'Invalid coordinates'}), 400
+
+    if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
+        return jsonify({'error': 'Coordinates are out of range'}), 400
+
+    cache_key = (round(latitude, 5), round(longitude, 5))
+    if cache_key in reverse_geocode_cache:
+        return jsonify(reverse_geocode_cache[cache_key])
+
+    lookup_url = (
+        'https://nominatim.openstreetmap.org/reverse?format=jsonv2'
+        f'&lat={latitude}&lon={longitude}&zoom=18&addressdetails=1&accept-language=ja'
+    )
+    lookup_request = urllib.request.Request(
+        lookup_url,
+        headers={'User-Agent': 'BousaiApp/1.0'}
+    )
+    try:
+        with urllib.request.urlopen(lookup_request, timeout=5) as response:
+            result = json.loads(response.read())
+        location = {
+            'name': result.get('name', ''),
+            'address': result.get('display_name', '')
+        }
+        reverse_geocode_cache[cache_key] = location
+        return jsonify(location)
+    except Exception:
+        return jsonify({'error': '住所候補を取得できませんでした'}), 502
 
 # 気象警報・注意報API
 @app.route('/api/weather_warnings')
