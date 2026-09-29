@@ -1,6 +1,7 @@
 from flask import Flask, jsonify, request, render_template, session, redirect, url_for
 from urllib.parse import urlparse, urljoin
 from functools import wraps
+import hashlib
 import json
 import os
 import uuid
@@ -458,7 +459,42 @@ def get_shelters():
 # JSON API：ホーム画面の危険箇所マーカー
 @app.route('/api/hazard_spots', methods=['GET'])
 def get_hazard_spots():
-    return jsonify(hazard_spots)
+    public_spots = []
+    for spot in hazard_spots:
+        public_spot = {key: value for key, value in spot.items() if key != 'seen_by'}
+        seen_by = spot.get('seen_by', [])
+        public_spot['seen_count'] = len(seen_by) if isinstance(seen_by, list) else 0
+        public_spots.append(public_spot)
+    return jsonify(public_spots)
+
+# 危険箇所の確認ボタン：同一ブラウザーからの重複を数えない
+@app.route('/api/hazard_spots/<int:spot_id>/seen', methods=['POST'])
+def mark_hazard_spot_seen(spot_id):
+    payload = request.get_json(silent=True) or {}
+    viewer_id = payload.get('viewer_id')
+    if not isinstance(viewer_id, str) or not 16 <= len(viewer_id) <= 128:
+        return jsonify({'error': 'Invalid viewer id'}), 400
+
+    spot = next((item for item in hazard_spots if item.get('id') == spot_id), None)
+    if spot is None:
+        return jsonify({'error': 'Hazard spot not found'}), 404
+
+    viewer_hash = hashlib.sha256(viewer_id.encode('utf-8')).hexdigest()
+    seen_by = spot.setdefault('seen_by', [])
+    if not isinstance(seen_by, list):
+        seen_by = []
+        spot['seen_by'] = seen_by
+
+    already_seen = viewer_hash in seen_by
+    if not already_seen:
+        seen_by.append(viewer_hash)
+        save_hazard_spots()
+
+    return jsonify({
+        'seen': True,
+        'already_seen': already_seen,
+        'count': len(seen_by)
+    })
 
 # 地図座標から住所・地名を取得する逆ジオコーディングAPI
 @app.route('/api/reverse_geocode', methods=['GET'])

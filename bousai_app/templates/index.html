@@ -155,6 +155,30 @@
   .hazard-popup-media { display: grid; gap: 7px; margin-top: 7px; }
   .hazard-popup-media img { display: block; max-width: 190px; max-height: 130px; border-radius: 4px; object-fit: cover; }
   .hazard-popup-media video { display: block; width: min(220px, 70vw); max-height: 150px; }
+  .hazard-popup-seen {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 9px;
+    margin-top: 12px;
+    padding-top: 8px;
+    border-top: 1px solid #e7ebf1;
+  }
+  .hazard-seen-count { color: #6b7789; font-size: 11px; white-space: nowrap; }
+  .hazard-seen-button {
+    min-height: 30px;
+    padding: 3px 9px;
+    border: 1px solid #cbd8ea;
+    border-radius: 5px;
+    color: #315d9e;
+    background: #f4f7fc;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .hazard-seen-button:hover:not(:disabled) { border-color: #8ca8d0; background: #eaf1fb; }
+  .hazard-seen-button:disabled { color: #758397; background: #f0f2f5; cursor: default; }
   .weather-details {
     padding: 15px 16px;
     border-radius: 9px;
@@ -295,6 +319,33 @@ document.addEventListener('DOMContentLoaded', function() {
             referrerPolicy: 'strict-origin-when-cross-origin'
         }).addTo(map);
 
+        let fallbackViewerId = '';
+        function getViewerId() {
+          try {
+            let viewerId = localStorage.getItem('hazardSpotViewerId');
+            if (!viewerId) {
+              viewerId = window.crypto && window.crypto.randomUUID
+                ? window.crypto.randomUUID()
+                : Date.now().toString(36) + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+              localStorage.setItem('hazardSpotViewerId', viewerId);
+            }
+            return viewerId;
+          } catch (error) {
+            if (!fallbackViewerId) {
+              fallbackViewerId = Date.now().toString(36) + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+            }
+            return fallbackViewerId;
+          }
+        }
+
+        function hasSeenSpot(spotId) {
+          try {
+            return localStorage.getItem('hazardSpotSeen:' + spotId) === '1';
+          } catch (error) {
+            return false;
+          }
+        }
+
         const hazardPictograms = {
           '道路の損傷': '🚧',
           '倒木・落下物': '🌳',
@@ -358,6 +409,41 @@ document.addEventListener('DOMContentLoaded', function() {
                         media.append(link);
                       }
                     });
+              const seenControls = L.DomUtil.create('div', 'hazard-popup-seen', popup);
+              const seenCount = L.DomUtil.create('span', 'hazard-seen-count', seenControls);
+              const seenButton = L.DomUtil.create('button', 'hazard-seen-button', seenControls);
+              seenButton.type = 'button';
+              seenButton.textContent = '👀 見ました';
+              seenButton.setAttribute('aria-pressed', String(hasSeenSpot(spot.id)));
+              seenButton.disabled = hasSeenSpot(spot.id);
+              seenCount.textContent = '見た人 ' + (Number(spot.seen_count) || 0) + '人';
+              L.DomEvent.disableClickPropagation(seenButton);
+              seenButton.addEventListener('click', function() {
+                if (seenButton.disabled) return;
+                seenButton.disabled = true;
+                fetch('/api/hazard_spots/' + encodeURIComponent(spot.id) + '/seen', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ viewer_id: getViewerId() })
+                })
+                  .then(function(response) {
+                    if (!response.ok) throw new Error('Seen update failed');
+                    return response.json();
+                  })
+                  .then(function(result) {
+                    seenCount.textContent = '見た人 ' + result.count + '人';
+                    seenButton.setAttribute('aria-pressed', 'true');
+                    try {
+                      localStorage.setItem('hazardSpotSeen:' + spot.id, '1');
+                    } catch (error) {
+                      // Server-side viewer ID still prevents duplicate counts in this page session.
+                    }
+                  })
+                  .catch(function() {
+                    seenButton.disabled = false;
+                    seenCount.textContent = '送信できませんでした';
+                  });
+              });
               const pictogram = Object.prototype.hasOwnProperty.call(hazardPictograms, spot.category)
                 ? hazardPictograms[spot.category]
                 : hazardPictograms['その他'];
