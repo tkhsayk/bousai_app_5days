@@ -453,12 +453,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 iconSize: [36, 36],
                 iconAnchor: [18, 18]
               });
+              const popupWidth = Math.max(140, Math.min(280, mapElement.clientWidth - 56));
+              const popupHeight = Math.max(120, mapElement.clientHeight - 60);
               L.marker([latitude, longitude], {
                 icon: markerIcon,
                 title: spot.category || '危険箇所'
               })
                 .addTo(map)
-                .bindPopup(popup);
+                .bindPopup(popup, {
+                  minWidth: popupWidth,
+                  maxWidth: popupWidth,
+                  maxHeight: popupHeight
+                });
             });
           })
           .catch(function() {

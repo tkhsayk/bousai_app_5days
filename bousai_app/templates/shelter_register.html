@@ -72,6 +72,7 @@
   .location-map { height: 260px; overflow: hidden; border: 1px solid #dce3eb; border-radius: 7px; background: #e5eef3; }
   #reportMap { width: 100%; height: 100%; }
   .field-hint, .location-status { margin: 6px 0 0; color: var(--muted); font-size: 12px; }
+  .location-status[data-error="true"] { color: #a6343b; font-weight: 700; }
   .report-actions { display: flex; align-items: center; gap: 16px; margin-top: 21px; }
   .report-submit {
     min-height: 42px;
@@ -108,16 +109,16 @@
 
     <form method="post" id="hazardReportForm" enctype="multipart/form-data">
       <div class="field">
-        <label for="title">場所の名称</label>
+        <label for="title">場所の名称（必須）</label>
         <input type="text" id="title" name="title" maxlength="80" required value="{{ form_data.get('title', '') if form_data else '' }}" placeholder="例：○○交差点付近">
       </div>
       <div class="field">
-        <label for="address">住所・名所</label>
+        <label for="address">住所・名所（任意）</label>
         <input type="text" id="address" name="address" maxlength="250" value="{{ form_data.get('address', '') if form_data else '' }}" placeholder="住所や施設名を入力">
         <p class="field-hint">地図のピンを置くと候補を入力します。内容は自由に修正できます。</p>
       </div>
       <div class="field">
-        <label for="category">危険の種類</label>
+        <label for="category">危険の種類（必須）</label>
         <select id="category" name="category" required>
           <option value="">選択してください</option>
           {% for category in categories %}
@@ -126,11 +127,11 @@
         </select>
       </div>
       <div class="field">
-        <label for="description">状況</label>
-        <textarea id="description" name="description" maxlength="500" required placeholder="危険な状況を入力">{{ form_data.get('description', '') if form_data else '' }}</textarea>
+        <label for="description">状況（任意）</label>
+        <textarea id="description" name="description" maxlength="500" placeholder="危険な状況を入力">{{ form_data.get('description', '') if form_data else '' }}</textarea>
       </div>
       <div class="field">
-        <label for="attachments">画像・動画を添付</label>
+        <label for="attachments">画像・動画を添付（任意）</label>
         <div class="attachment-zone" id="attachmentDropzone">
           <input class="attachment-input" type="file" id="attachments" name="attachments" multiple accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,video/quicktime,video/x-m4v">
           <label class="attachment-button" for="attachments">ファイルを選択</label>
@@ -140,8 +141,8 @@
         <div class="attachment-list" id="attachmentList" aria-live="polite"></div>
       </div>
       <div class="field">
-        <label for="reportMap">場所を地図上で選択</label>
-        <div class="location-map"><div id="reportMap" role="region" aria-label="危険箇所の位置選択地図"></div></div>
+        <label for="reportMap">場所を地図上で選択（必須）</label>
+        <div class="location-map"><div id="reportMap" role="region" aria-label="危険箇所の位置選択地図" tabindex="0"></div></div>
         <p class="location-status" id="locationStatus" aria-live="polite">地図をクリックして場所を指定してください。住所候補はOpenStreetMapから取得します。</p>
         <input type="hidden" id="latitude" name="latitude" value="{{ form_data.get('latitude', '') if form_data else '' }}">
         <input type="hidden" id="longitude" name="longitude" value="{{ form_data.get('longitude', '') if form_data else '' }}">
@@ -170,6 +171,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const attachmentDropzone = document.getElementById('attachmentDropzone');
     const attachmentList = document.getElementById('attachmentList');
     const attachmentStatus = document.getElementById('attachmentStatus');
+    const reportForm = document.getElementById('hazardReportForm');
     const maxAttachments = 5;
     const maxAttachmentSize = 20 * 1024 * 1024;
     let selectedFiles = [];
@@ -323,6 +325,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
     map.on('click', function(event) {
         setLocation(event.latlng.lat, event.latlng.lng);
+    });
+
+    reportForm.addEventListener('submit', function(event) {
+      if (latitudeInput.value && longitudeInput.value) return;
+      event.preventDefault();
+      locationStatus.dataset.error = 'true';
+      locationStatus.textContent = '地図上で危険な場所を指定してください。';
+      mapElement.focus();
     });
 
     const initialLatitude = Number(latitudeInput.value);

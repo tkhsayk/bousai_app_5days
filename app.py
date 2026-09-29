@@ -346,8 +346,8 @@ def hazard_report():
             message = '住所・地名は250文字以内で入力してください。'
         elif category not in HAZARD_CATEGORIES:
             message = '危険の種類を選択してください。'
-        elif not description or len(description) > 500:
-            message = '状況を500文字以内で入力してください。'
+        elif len(description) > 500:
+            message = '状況は500文字以内で入力してください。'
         elif latitude is None or longitude is None or not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
             message = '地図をクリックして場所を指定してください。'
         elif len(uploaded_files) > MAX_HAZARD_ATTACHMENTS:
